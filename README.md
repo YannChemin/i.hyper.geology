@@ -225,7 +225,6 @@ Missing regions generate a warning and that class of indicators is set to zero
 - [i.hyper.indices](../i.hyper.indices/README.md) — spectral indices (86+)
 - [i.hyper.albedo](../i.hyper.albedo/README.md) — broadband albedo
 - [i.hyper.atcorr](../i.hyper.atcorr/README.md) — atmospheric correction
-- [i.hyper.smac](../i.hyper.smac/README.md) — SMAC atmospheric correction
 - GRASS manual page: [i.hyper.geology.html](i.hyper.geology.html)
 
 ## Testsuite
@@ -249,8 +248,8 @@ kaolinite, white mica, carbonate, gypsum/AMD, serpentinite).
 
 ## License
 
-GPL-2.0-or-later — see [LICENSE](LICENSE)
+Unlicense — see [LICENSE](LICENSE)
 
 ## Authors
 
-Created for the i.hyper module family / M4Mining project (2026).
+Created for the i.hyper module family / M4Mining project (2025).
