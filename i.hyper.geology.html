@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>i.hyper.geology - GRASS GIS manual</title>
+<meta charset="utf-8">
+</head>
+<body>
+
+<h2>DESCRIPTION</h2>
+
+<p><em>i.hyper.geology</em> performs geological rock family classification,
+mineralogical range assessment, and weathering grade mapping from
+hyperspectral imagery imported as 3D raster maps (<code>raster_3d</code>) by
+<a href="i.hyper.import.html">i.hyper.import</a>.</p>
+
+<p>The module reads wavelength metadata from hyperspectral 3D raster bands
+and computes up to 15 spectral indicators from VNIR (400-1000 nm) and
+SWIR (1000-2500 nm) diagnostic absorption features. These indicators
+drive three expert-system classifications: rock family (8 classes),
+weathering grade (W0-W5), and hydrothermal/supergene alteration type
+(10 categories).</p>
+
+<p><em>i.hyper.geology</em> is part of the <b>i.hyper</b> module family designed for
+hyperspectral data import, processing, and analysis in GRASS. It
+provides a geologically interpretable output suite for mineral exploration,
+mine-site mapping, lithological survey, and environmental monitoring of
+acid mine drainage (AMD).</p>
+
+<h3>Rock family classification</h3>
+
+<p>Eight rock families plus an uncertain class are mapped:</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Class</th><th>Label</th><th>Key diagnostic features</th></tr>
+  <tr><td>0</td><td>Masked</td><td>NDVI &gt; 0.3 (vegetation/water)</td></tr>
+  <tr><td>1</td><td>Mafic</td><td>Fe<sup>2+</sup> ~1000 nm, Mg-OH 2320 nm (chlorite), Fe-oxide VNIR</td></tr>
+  <tr><td>2</td><td>Ultramafic</td><td>Strong Mg-OH 2315-2325 nm, Fe<sup>2+</sup> 900/1050 nm, absent Al-OH</td></tr>
+  <tr><td>3</td><td>Felsic</td><td>Al-OH dominant 2195-2220 nm, alunite/kaolinite possible</td></tr>
+  <tr><td>4</td><td>Intermediate</td><td>Mixed Fe<sup>2+</sup> + Al-OH + Mg-OH (hornblende)</td></tr>
+  <tr><td>5</td><td>Carbonate sedimentary</td><td>CO<sub>3</sub> absorption 2340 nm (calcite) / 2320 nm (dolomite)</td></tr>
+  <tr><td>6</td><td>Siliciclastic sedimentary</td><td>Clay Al-OH 2200-2220 nm, Fe-oxide staining</td></tr>
+  <tr><td>7</td><td>Metamorphic</td><td>Mica + chlorite + amphibole, low Fe-oxide</td></tr>
+  <tr><td>8</td><td>Evaporite/Sulphate</td><td>Gypsum 1750 nm, alunite 2270 nm, jarosite VNIR</td></tr>
+  <tr><td>9</td><td>Uncertain/Mixed</td><td>No dominant class above minimum score threshold</td></tr>
+</table>
+
+<h3>Weathering grade</h3>
+
+<p>Six ISRM-inspired weathering grades are assessed spectroscopically:</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Grade</th><th>Label</th><th>Spectral signature</th></tr>
+  <tr><td>W0</td><td>Fresh</td><td>Primary minerals dominant, Fe<sup>2+</sup> intact, no clay/oxide coatings</td></tr>
+  <tr><td>W1</td><td>Slightly weathered</td><td>Minor Fe-oxide staining, primary minerals still dominant</td></tr>
+  <tr><td>W2</td><td>Moderately weathered</td><td>Strengthening Fe-oxide, incipient kaolinite/chlorite</td></tr>
+  <tr><td>W3</td><td>Highly weathered</td><td>Strong Fe-oxide, clay minerals dominant</td></tr>
+  <tr><td>W4</td><td>Completely weathered</td><td>Very strong Fe-oxide (laterite), clay-dominant spectrum</td></tr>
+  <tr><td>W5</td><td>Residual soil</td><td>Deep laterite/bauxite profile, goethite/hematite at maximum</td></tr>
+</table>
+
+<h3>Alteration type</h3>
+
+<p>Ten hydrothermal and supergene alteration categories support mining and
+exploration applications:</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Code</th><th>Type</th><th>Key minerals</th></tr>
+  <tr><td>1</td><td>Unaltered</td><td>Primary mineralogy, all indicators low</td></tr>
+  <tr><td>2</td><td>Propylitic</td><td>Chlorite + calcite + epidote</td></tr>
+  <tr><td>3</td><td>Phyllic</td><td>White mica (sericite/muscovite) 2195-2210 nm</td></tr>
+  <tr><td>4</td><td>Argillic</td><td>Kaolinite 2165/2205 nm</td></tr>
+  <tr><td>5</td><td>Advanced argillic</td><td>Alunite + dickite/pyrophyllite</td></tr>
+  <tr><td>6</td><td>Supergene</td><td>Secondary goethite/hematite, low jarosite</td></tr>
+  <tr><td>7</td><td>AMD active</td><td>Jarosite + efflorescent sulphates</td></tr>
+  <tr><td>8</td><td>AMD mature</td><td>Hydrated goethite/schwertmannite</td></tr>
+  <tr><td>9</td><td>Carbonate alteration</td><td>Carbonatization, skarn, calcite veining</td></tr>
+  <tr><td>10</td><td>Serpentinization</td><td>Serpentine + talc + chlorite (ultramafic)</td></tr>
+</table>
+
+<h2>NOTES</h2>
+
+<h3>Input requirements</h3>
+
+<p>The module expects input data to be a 3D raster map created by
+<em>i.hyper.import</em> or any 3D raster with wavelength metadata stored in
+band-level metadata following the <em>i.hyper</em> standard format:
+<b>wavelength</b>, <b>FWHM</b>, <b>valid</b>, and <b>unit</b>.</p>
+
+<p>Spectra must be in surface reflectance units (0-1 range). Top-of-atmosphere
+radiance or raw digital numbers will produce invalid results. Apply
+atmospheric correction (e.g., <em>i.hyper.atcorr</em>) before using this module.</p>
+
+<h3>Spectral indicators</h3>
+
+<p>The module computes 15 spectral indicators via <b>r.mapcalc</b>. Each indicator
+targets a specific mineral absorption feature.</p>
+
+<p><b>Band depth indicators</b> use the normalized band depth formula:</p>
+<div class="code"><pre>band_depth = max(0, 1 - rho_center / mean(rho_left, rho_right))</pre></div>
+
+<p>This is a continuum-removed depth estimate at a single absorption feature,
+clamped to zero (negative values indicate a reflectance peak, not an absorption).</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Indicator</th><th>Target (nm)</th><th>Bands used (nm)</th><th>Mineral target</th></tr>
+  <tr><td>jarosite_vnir</td><td>430</td><td>400 / 430 / 470</td><td>Jarosite, AMD sulphates</td></tr>
+  <tr><td>goethite_900</td><td>900</td><td>750 / 900 / 1050</td><td>Goethite, Fe-oxide</td></tr>
+  <tr><td>ferrous_1000</td><td>1000</td><td>850 / 1000 / 1200</td><td>Pyroxene, olivine (Fe<sup>2+</sup>)</td></tr>
+  <tr><td>hydroxyl_1400</td><td>1400</td><td>1350 / 1400 / 1500</td><td>Hydroxyl overtone</td></tr>
+  <tr><td>water_1900</td><td>1900</td><td>1800 / 1900 / 2000</td><td>H<sub>2</sub>O, hydrated minerals</td></tr>
+  <tr><td>gypsum_1750</td><td>1750</td><td>1700 / 1750 / 1800</td><td>Gypsum SO<sub>4</sub></td></tr>
+  <tr><td>aloh_2200</td><td>2200</td><td>2100 / 2200 / 2280</td><td>Al-OH (kaolinite, mica, alunite)</td></tr>
+  <tr><td>alunite_2270</td><td>2270</td><td>2220 / 2270 / 2310</td><td>Alunite SO<sub>4</sub></td></tr>
+  <tr><td>mgoh_2300</td><td>2320</td><td>2250 / 2320 / 2400</td><td>Mg-OH (chlorite, serpentine, talc)</td></tr>
+  <tr><td>carbonate_2340</td><td>2340</td><td>2290 / 2340 / 2400</td><td>CO<sub>3</sub> (calcite, dolomite)</td></tr>
+</table>
+
+<p><b>Ratio indicators:</b></p>
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Indicator</th><th>Formula</th><th>Interpretation</th></tr>
+  <tr><td>hematite_vnir</td><td>rho630 / rho490</td><td>Fe<sup>3+</sup> hematite doublet; &gt;1.2 indicates hematite</td></tr>
+  <tr><td>fe_oxide_broad</td><td>rho750 / rho550</td><td>Broad Fe<sup>3+</sup> charge-transfer; &gt;1.5 indicates strong Fe-oxide</td></tr>
+  <tr><td>aloh_position</td><td>rho2165 / rho2220</td><td>&gt;1.0 = kaolinite direction; &lt;1.0 = muscovite direction</td></tr>
+</table>
+
+<p><b>Composite indices</b> from Tolentino et al. (2025):</p>
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Index</th><th>Formula</th><th>Range</th></tr>
+  <tr><td>reactivity_index</td><td>(rho2210 + rho2395) / (rho2285 + rho2330)</td><td>0.66 - 2.11; AMD reactivity</td></tr>
+  <tr><td>clay_mixture_index</td><td>(rho2168 &times; rho2224) / rho2198</td><td>1.15 - 4.34; clay mixtures</td></tr>
+</table>
+
+<h3>Classification method</h3>
+
+<p>Rock family classification uses a weighted scoring approach. For each of the
+8 rock families a score is computed as a weighted linear combination of relevant
+spectral indicators. The class with the maximum score (minimum threshold 0.15) is
+assigned. When indicator bands are absent (no band within 25 nm tolerance of the
+target wavelength), the indicator is set to a neutral constant and does not penalize
+any class.</p>
+
+<p>Vegetation pixels (NDVI &gt; 0.3, using bands near 678 and 800 nm) are masked to
+class 0.</p>
+
+<p>The priority order for tie-breaking when scores are equal is:
+Evaporite/Sulphate &gt; Carbonate &gt; Ultramafic &gt; Mafic &gt; Metamorphic &gt;
+Felsic &gt; Intermediate &gt; Siliciclastic.</p>
+
+<h3>Flags</h3>
+
+<p>The <b>-n</b> flag restricts processing to only bands marked as valid
+(<code>valid=1</code>) in the metadata. This is useful for excluding atmospheric water
+vapour absorption bands (around 1400 and 1900 nm) if they were flagged during import.
+Note that flagging the 1400 and 1900 nm water vapour bands will disable the
+<em>hydroxyl_1400</em> and <em>water_1900</em> indicators.</p>
+
+<p>The <b>-i</b> flag prints spectral coverage diagnostics and capability assessment
+without processing any raster data. Use this first to understand what geological
+information is accessible from a given sensor dataset.</p>
+
+<p>The <b>-m</b> flag outputs all 15 individual spectral indicator maps using the
+provided <code>output_prefix</code>. These floating-point maps are useful for threshold
+tuning, visual inspection, or input to custom classification workflows.</p>
+
+<p>The <b>-v</b> flag prints diagnostic messages listing the exact wavelength of each
+band used for each indicator computation. Useful for validating sensor-to-wavelength
+matching.</p>
+
+<h3>Limitations</h3>
+
+<ul>
+  <li>Classification accuracy depends strongly on SWIR coverage (1000-2500 nm).
+    VNIR-only sensors will miss critical carbonate, clay, and hydroxyl features.</li>
+  <li>Spectra must be in surface reflectance units (0-1 range).</li>
+  <li>Dense vegetation cover (NDVI &gt; 0.3) is masked; sparse vegetation or
+    mixed pixels may still influence results.</li>
+  <li>Lithological units with complex mineral mixtures may fall into the
+    Uncertain/Mixed class (9).</li>
+  <li>The 25 nm band tolerance may cause incorrect band selection for sensors
+    with large spectral gaps.</li>
+</ul>
+
+<h2>EXAMPLES</h2>
+
+<div class="code"><pre>
+# Basic rock family mapping from EnMAP data
+i.hyper.geology input=enmap \
+                output_family=enmap_rock_family
+</pre></div>
+
+<div class="code"><pre>
+# Full geological assessment suite
+i.hyper.geology input=prisma \
+                output_family=prisma_lithology \
+                output_weathering=prisma_weathering \
+                output_alteration=prisma_alteration
+</pre></div>
+
+<div class="code"><pre>
+# Check spectral capabilities before processing
+i.hyper.geology input=tanager \
+                output_family=dummy \
+                -i
+
+# Console output (example):
+# ============================================================
+# i.hyper.geology - Geological Assessment Capabilities
+# ============================================================
+# Sensor spectral coverage: 400.0 - 2500.0 nm (400 bands)
+#
+# Spectral Region Coverage:
+#   VNIR Fe-oxide (400-1000 nm):   AVAILABLE - 200 bands
+#   NIR Fe2+ (900-1100 nm):         AVAILABLE - 20 bands
+#   SWIR OH/H2O (1350-1450 nm):     AVAILABLE - 8 bands
+#   SWIR H2O (1800-2000 nm):        AVAILABLE - 18 bands
+#   SWIR Al-OH (2100-2300 nm):      AVAILABLE - 36 bands
+#   SWIR Mg-OH (2250-2400 nm):      AVAILABLE - 28 bands
+#   SWIR CO3 (2290-2400 nm):        AVAILABLE - 20 bands
+</pre></div>
+
+<div class="code"><pre>
+# Map only valid bands, export mineral indicator maps
+i.hyper.geology input=enmap \
+                output_family=enmap_lithology \
+                output_weathering=enmap_weathering \
+                output_alteration=enmap_alteration \
+                output_prefix=enmap_minerals \
+                -n -m
+
+# This produces maps such as:
+#   enmap_minerals_aloh_2200
+#   enmap_minerals_mgoh_2300
+#   enmap_minerals_carbonate_2340
+#   enmap_minerals_goethite_900
+#   enmap_minerals_gypsum_1750
+#   ... (15 total indicator maps)
+</pre></div>
+
+<div class="code"><pre>
+# AMD monitoring workflow for mine site
+# Step 1: Import drone VNIR-SWIR hyperspectral data
+i.hyper.import input=/data/drone_hsi.hdr \
+               product=envi \
+               output=drone_hsi
+
+# Step 2: Full geological assessment with verbose reporting
+i.hyper.geology input=drone_hsi \
+                output_family=drone_lithology \
+                output_weathering=drone_weathering \
+                output_alteration=drone_alteration \
+                output_prefix=drone_minerals \
+                -n -m -v
+
+# Step 3: Extract AMD-affected areas (alteration class 7 = AMD active)
+r.mapcalc expression="amd_mask = if(drone_alteration == 7, 1, null())"
+
+# Step 4: Statistics on AMD extent
+r.univar map=amd_mask
+
+# Step 5: Visualize
+d.rast map=drone_alteration
+d.legend raster=drone_alteration
+</pre></div>
+
+<div class="code"><pre>
+# Bauxite prospectivity mapping
+# High weathering grades (W4-W5) in felsic/intermediate rocks
+# indicate bauxite formation potential (Kouzeli et al. 2025)
+i.hyper.geology input=satellite_hsi \
+                output_family=lithology \
+                output_weathering=weathering
+
+r.mapcalc expression="bauxite_prospective = \
+    if((weathering == 4 || weathering == 5) && \
+       (lithology == 3 || lithology == 4), 1, null())"
+
+r.colors map=bauxite_prospective color=bgyr
+</pre></div>
+
+<div class="code"><pre>
+# Limit processing to SWIR range for alteration mapping only
+i.hyper.geology input=enmap \
+                output_family=enmap_family \
+                output_alteration=enmap_alteration \
+                min_wavelength=1000 \
+                max_wavelength=2500
+</pre></div>
+
+<h2>SEE ALSO</h2>
+
+<a href="i.hyper.import.html">i.hyper.import</a>,
+<a href="i.hyper.continuum.html">i.hyper.continuum</a>,
+<a href="i.hyper.indices.html">i.hyper.indices</a>,
+<a href="i.hyper.albedo.html">i.hyper.albedo</a>,
+<a href="i.hyper.rgb.html">i.hyper.rgb</a>,
+<a href="https://grass.osgeo.org/grass-stable/manuals/r.mapcalc.html">r.mapcalc</a>,
+<a href="https://grass.osgeo.org/grass-stable/manuals/r.colors.html">r.colors</a>,
+<a href="https://grass.osgeo.org/grass-stable/manuals/r.category.html">r.category</a>,
+<a href="https://grass.osgeo.org/grass-stable/manuals/r.univar.html">r.univar</a>,
+<a href="https://grass.osgeo.org/grass-stable/manuals/r3.info.html">r3.info</a>
+
+<h2>REFERENCES</h2>
+
+<ul>
+  <li>Koerting, F., et al. (2024). VNIR-SWIR Imaging Spectroscopy for
+    Mining: A Review of Methods and Applications. <em>Mining</em>, 4, 1013-1057.
+    <a href="https://doi.org/10.3390/mining4040056">doi:10.3390/mining4040056</a></li>
+  <li>Tolentino, P.L.M., et al. (2025). Drone-Based VNIR-SWIR Hyperspectral
+    Imaging for Acid Mine Drainage Characterisation. <em>Drones</em>, 9, 313.
+    <a href="https://doi.org/10.3390/drones9050313">doi:10.3390/drones9050313</a></li>
+  <li>Kouzeli, K., et al. (2025). Exploitation of Satellite Imagery for
+    Bauxite Mine Waste Characterisation. <em>ISPRS Archives</em>, Vol. XLVIII-2/W4.
+    <a href="https://doi.org/10.5194/isprs-archives-XLVIII-2-W4-2025">doi:10.5194/isprs-archives-XLVIII-2-W4-2025</a></li>
+  <li>Clark, R.N., et al. (1990). High spectral resolution reflectance
+    spectroscopy of minerals. <em>Journal of Geophysical Research: Solid
+    Earth</em>, 95(B8), 12653-12680.</li>
+  <li>Hunt, G.R. (1977). Spectral signatures of particulate minerals in the
+    visible and near infrared. <em>Geophysics</em>, 42(3), 501-513.</li>
+  <li>Kokaly, R.F., et al. (2017). USGS Spectral Library Version 7. U.S.
+    Geological Survey Data Series 1035.
+    <a href="https://doi.org/10.3133/ds1035">doi:10.3133/ds1035</a></li>
+</ul>
+
+<h2>AUTHORS</h2>
+
+<p>Created for the i.hyper module family</p>
+
+<p>Based on spectral geology methods from Koerting et al. (2024),
+Tolentino et al. (2025), and Kouzeli et al. (2025).</p>
+
+</body>
+</html>
