@@ -230,8 +230,8 @@ Missing regions generate a warning and that class of indicators is set to zero
 
 ## License
 
-GPL-2.0-or-later — see [LICENSE](LICENSE)
+Unlicenced — see [LICENSE](LICENSE)
 
 ## Authors
 
-Created for the i.hyper module family / M4Mining project (2026).
+Created for the i.hyper module family / based on the European Project M4Mining (2025).
