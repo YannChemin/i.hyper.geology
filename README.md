@@ -70,8 +70,8 @@ geological mapping context where VNIR-SWIR reflectance data are available.
 | 6 | Supergene | Strong goethite + hematite; no jarosite |
 | 7 | AMD active | Jarosite VNIR or reactivity index > 1.5 |
 | 8 | AMD mature | Hydrated goethite (900 nm + 1900 nm) |
-| 9 | Carbonate alteration | CO₃ > 0.06; low Al-OH |
-| 10 | Serpentinization | Mg-OH > 0.08; no Al-OH; no carbonate |
+| 9 | Carbonate alteration | CO₃ > 0.06; low Al-OH; low Mg-OH |
+| 10 | Serpentinization | Mg-OH > 0.08; no Al-OH |
 
 ---
 
@@ -92,7 +92,7 @@ as inputs to the scoring classifier.
 | `water_1900` | 1800 / 1900 / 2000 | H₂O first overtone |
 | `gypsum_1750` | 1700 / 1750 / 1800 | Gypsum SO₄²⁻ |
 | `aloh_2200` | 2100 / 2200 / 2280 | Al-OH (clays, mica) |
-| `aloh_position` | 2165 / 2220 ratio | Kaolinite vs. muscovite position |
+| `aloh_position` | 2165 / 2220 ratio | Al-OH position: > 1.0 → muscovite (phyllic); < 1.0 → kaolinite (argillic) |
 | `alunite_2270` | 2220 / 2270 / 2310 | Alunite / advanced argillic |
 | `mgoh_2300` | 2250 / 2320 / 2400 | Mg-OH (chlorite, serpentine, talc) |
 | `carbonate_2340` | 2290 / 2340 / 2400 | Calcite / dolomite CO₃²⁻ |
@@ -225,12 +225,32 @@ Missing regions generate a warning and that class of indicators is set to zero
 - [i.hyper.indices](../i.hyper.indices/README.md) — spectral indices (86+)
 - [i.hyper.albedo](../i.hyper.albedo/README.md) — broadband albedo
 - [i.hyper.atcorr](../i.hyper.atcorr/README.md) — atmospheric correction
+- [i.hyper.smac](../i.hyper.smac/README.md) — SMAC atmospheric correction
 - GRASS manual page: [i.hyper.geology.html](i.hyper.geology.html)
+
+## Testsuite
+
+A gunittest-based testsuite is located in `testsuite/`.  It covers 51 test
+cases including basic execution, info mode, wavelength filtering, weathering
+classification, alteration classification, indicator physics, and parameter
+validation.
+
+```bash
+# Run from inside an active GRASS session (location with a writable mapset):
+cd testsuite
+python3 -m unittest test_i_hyper_geology
+```
+
+Test data is generated synthetically by `testsuite/generate_test_data.py`
+using seven spectral end-member scenes (fresh mafic, goethite-weathered,
+kaolinite, white mica, carbonate, gypsum/AMD, serpentinite).
+
+---
 
 ## License
 
-Unlicenced — see [LICENSE](LICENSE)
+GPL-2.0-or-later — see [LICENSE](LICENSE)
 
 ## Authors
 
-Created for the i.hyper module family / based on the European Project M4Mining (2025).
+Created for the i.hyper module family / M4Mining project (2026).

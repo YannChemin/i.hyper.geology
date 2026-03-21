@@ -290,7 +290,7 @@ def print_info(bands, cov):
     gs.message(sep)
     gs.message(f"Sensor spectral coverage: {cov['wl_min']:.1f} - {cov['wl_max']:.1f} nm "
                f"({cov['n_total']} bands)")
-    gs.message("")
+    gs.message(" ")
     gs.message("Spectral Region Coverage:")
     gs.message(f"  VNIR Fe-oxide (400-1000 nm):   {avail(cov['has_vnir'], cov['vnir'])}")
     gs.message(f"  NIR Fe2+ (900-1100 nm):         {avail(cov['has_nir'], cov['nir_fe2'])}")
@@ -299,7 +299,7 @@ def print_info(bands, cov):
     gs.message(f"  SWIR Al-OH (2100-2300 nm):      {avail(cov['has_swir_aloh'], cov['swir_aloh'])}")
     gs.message(f"  SWIR Mg-OH (2250-2400 nm):      {avail(cov['has_swir_mgoh'], cov['swir_mgoh'])}")
     gs.message(f"  SWIR CO3 (2290-2400 nm):        {avail(cov['has_swir_co3'], cov['swir_co3'])}")
-    gs.message("")
+    gs.message(" ")
 
     full_label = "FULL (all regions available)" if (cov['has_vnir'] and cov['full_swir']) else "PARTIAL"
     gs.message("Geological Assessment Capabilities:")
@@ -310,7 +310,7 @@ def print_info(bands, cov):
     gs.message(f"  Al-OH position mapping:        {'FULL' if cov['has_swir_aloh'] else 'NOT AVAILABLE'}")
     gs.message(f"  Mg-OH mapping:                 {'FULL' if cov['has_swir_mgoh'] else 'NOT AVAILABLE'}")
     gs.message(f"  Carbonate mapping:             {'FULL' if cov['has_swir_co3'] else 'NOT AVAILABLE'}")
-    gs.message("")
+    gs.message(" ")
 
     def yes_no(b):
         return "YES" if b else "NO"
@@ -904,10 +904,10 @@ def build_alteration_map(pid, indicators, output_name):
     adv_arg = (f"{I('alunite_2270')} > 0.04 && "
                f"{I('gypsum_1750')} > 0.03")
     serp = (f"{I('mgoh_2300')} > 0.08 && "
-            f"{I('aloh_2200')} < 0.03 && "
-            f"{I('carbonate_2340')} < 0.03")
+            f"{I('aloh_2200')} < 0.03")
     carb_alt = (f"{I('carbonate_2340')} > 0.06 && "
-                f"{I('aloh_2200')} < 0.03")
+                f"{I('aloh_2200')} < 0.03 && "
+                f"{I('mgoh_2300')} < 0.06")
     amd_mature = (f"{I('goethite_900')} > 0.08 && "
                   f"{I('water_1900')} > 0.10")
     supergene = (f"{I('goethite_900')} > 0.08 && "
@@ -1175,7 +1175,7 @@ def main(options, flags):
             output_mineral_maps(indicators, output_prefix, tmp_maps)
 
         gs.percent(4, 4, 1)
-        gs.message("")
+        gs.message(" ")
         gs.message("=" * 60)
         gs.message("i.hyper.geology completed successfully.")
         gs.message(f"  Rock family map:   {output_family}")

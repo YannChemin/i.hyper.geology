@@ -63,8 +63,8 @@ exploration applications:
 | 6 | Supergene | Secondary goethite/hematite, low jarosite |
 | 7 | AMD active | Jarosite + efflorescent sulphates |
 | 8 | AMD mature | Hydrated goethite/schwertmannite |
-| 9 | Carbonate alteration | Carbonatization, skarn, calcite veining |
-| 10 | Serpentinization | Serpentine + talc + chlorite (ultramafic) |
+| 9 | Carbonate alteration | Carbonatization, skarn, calcite veining; CO₃ > 0.06, low Al-OH, low Mg-OH |
+| 10 | Serpentinization | Serpentine + talc + chlorite (ultramafic); Mg-OH > 0.08, no Al-OH |
 
 ## NOTES
 
@@ -96,7 +96,7 @@ The module computes 15 spectral indicators via **r.mapcalc**:
 
 - `hematite_vnir` : rho630/rho490 (hematite doublet, Fe3+)
 - `fe_oxide_broad` : rho750/rho550 (broad Fe3+ charge-transfer)
-- `aloh_position` : rho2165/rho2220 (>1 = kaolinite direction; <1 = muscovite direction)
+- `aloh_position` : rho2165/rho2220 (>1 = muscovite direction / phyllic; <1 = kaolinite direction / argillic)
 
 **Composite indices** from Tolentino et al. (2025):
 
