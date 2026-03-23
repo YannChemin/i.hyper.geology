@@ -99,6 +99,7 @@
 
 import sys
 import os
+import re
 import grass.script as gs
 
 # ---------------------------------------------------------------------------
@@ -177,6 +178,31 @@ def parse_wavelength_from_metadata(raster3d, band_num):
     return wavelength, fwhm, valid, unit
 
 
+def parse_wavelengths_from_3d_comments(raster3d):
+    """Parse band wavelengths from the 3D raster's own r3.info comments.
+
+    Supports the format written by r3.in.bin-based workflows:
+        Band N: WAVELENGTH nm, FWHM: FWHM_VAL nm
+
+    Returns a dict mapping band_num (int) -> (wavelength, fwhm, valid, unit).
+    Returns an empty dict if the format is not recognised.
+    """
+    try:
+        info_text = gs.read_command('r3.info', map=raster3d)
+    except Exception:
+        return {}
+    pattern = re.compile(
+        r'Band\s+(\d+):\s+([\d.]+)\s+nm[,\s]+FWHM:\s+([\d.]+)\s+nm'
+    )
+    bands = {}
+    for line in info_text.split('\n'):
+        m = pattern.search(line)
+        if m:
+            band_num = int(m.group(1))
+            bands[band_num] = (float(m.group(2)), float(m.group(3)), True, 'nm')
+    return bands
+
+
 def convert_wavelength_to_nm(wavelength, unit):
     """Convert wavelength to nanometers."""
     unit = unit.lower().strip()
@@ -192,34 +218,124 @@ def convert_wavelength_to_nm(wavelength, unit):
 
 
 def get_all_band_wavelengths(raster3d, only_valid=False, min_wl=None, max_wl=None):
-    """Extract all band wavelengths and metadata from 3D raster."""
+    """Extract all band wavelengths and metadata from 3D raster.
+
+    Each returned band dict contains a 'map_name' key:
+    - When 2D band-slice rasters exist (i.hyper.import workflow), map_name is set
+      to the slice raster name ({raster3d}#{band_num}).
+    - When they do not exist (r3.in.bin / direct import workflow), map_name is
+      None; call extract_band_slices() before computing indicators.
+    """
     info = get_raster3d_info(raster3d)
     depths = int(info['depths'])
     bands = []
     gs.verbose(f"Scanning {depths} bands for wavelength metadata...")
-    for i in range(1, depths + 1):
-        wavelength, fwhm, valid, unit = parse_wavelength_from_metadata(raster3d, i)
-        if wavelength is None:
-            continue
-        wavelength_nm = convert_wavelength_to_nm(wavelength, unit)
-        if min_wl is not None and wavelength_nm < min_wl:
-            continue
-        if max_wl is not None and wavelength_nm > max_wl:
-            continue
-        if only_valid and not valid:
-            continue
-        bands.append({
-            'band_num': i,
-            'wavelength': wavelength_nm,
-            'fwhm': fwhm if fwhm else 0,
-            'valid': valid,
-            'unit': unit,
-        })
+
+    # Check upfront whether 2D band-slice rasters exist (silent, no ERRORs).
+    base_name = raster3d.split('@')[0]
+    mapset = raster3d.split('@')[1] if '@' in raster3d else None
+    slice_check = gs.find_file(f"{base_name}#1", element='cell', mapset=mapset)
+    slices_exist = bool(slice_check.get('name'))
+
+    if slices_exist:
+        # Standard i.hyper.import path: metadata from 2D slice rasters.
+        for i in range(1, depths + 1):
+            wavelength, fwhm, valid, unit = parse_wavelength_from_metadata(raster3d, i)
+            if wavelength is None:
+                continue
+            wavelength_nm = convert_wavelength_to_nm(wavelength, unit)
+            if min_wl is not None and wavelength_nm < min_wl:
+                continue
+            if max_wl is not None and wavelength_nm > max_wl:
+                continue
+            if only_valid and not valid:
+                continue
+            bands.append({
+                'band_num': i,
+                'wavelength': wavelength_nm,
+                'fwhm': fwhm if fwhm else 0,
+                'valid': valid,
+                'unit': unit,
+                'map_name': f"{raster3d}#{i}",
+            })
+    else:
+        # Fallback: wavelengths from the 3D raster's own comment block.
+        gs.verbose("Band slice rasters not found; reading metadata from 3D raster comments.")
+        wl_dict = parse_wavelengths_from_3d_comments(raster3d)
+        for i in range(1, depths + 1):
+            if i not in wl_dict:
+                continue
+            wavelength, fwhm, valid, unit = wl_dict[i]
+            wavelength_nm = convert_wavelength_to_nm(wavelength, unit)
+            if min_wl is not None and wavelength_nm < min_wl:
+                continue
+            if max_wl is not None and wavelength_nm > max_wl:
+                continue
+            if only_valid and not valid:
+                continue
+            bands.append({
+                'band_num': i,
+                'wavelength': wavelength_nm,
+                'fwhm': fwhm if fwhm else 0,
+                'valid': valid,
+                'unit': unit,
+                'map_name': None,  # filled by extract_band_slices()
+            })
+
     if not bands:
         gs.fatal("No wavelength metadata found in 3D raster bands. "
-                 "Ensure input was created by i.hyper.import.")
+                 "Ensure input was created by i.hyper.import or contains "
+                 "'Band N: WL nm, FWHM: F nm' lines in its r3.info comments.")
     bands.sort(key=lambda x: x['wavelength'])
     return bands
+
+
+def extract_band_slices(raster3d, bands, pid, tmp_maps):
+    """Extract 2D band slices from a 3D raster using r3.to.rast.
+
+    Updates each band dict's 'map_name' in-place.
+    Called only when band slice rasters were not created by i.hyper.import.
+
+    r3.to.rast requires the 3D computational region to match the 3D raster.
+    The current region is saved before modification and restored afterwards.
+    Map names produced by r3.to.rast are discovered via g.list so the code
+    is robust to GRASS version differences in naming convention.
+    """
+    prefix = make_tmp_name(pid, 'bslice')
+    saved_region = make_tmp_name(pid, 'saved_region')
+
+    # Save current region, align to 3D raster, extract, then restore.
+    gs.run_command('g.region', save=saved_region, overwrite=True, quiet=True)
+    try:
+        gs.run_command('g.region', raster3d=raster3d, quiet=True)
+        gs.message("Extracting 2D band slices from 3D raster (one-time operation)...")
+        gs.run_command('r3.to.rast', input=raster3d, output=prefix,
+                       overwrite=True, quiet=True)
+    finally:
+        gs.run_command('g.region', region=saved_region, quiet=True)
+        gs.run_command('g.remove', type='region', name=saved_region,
+                       flags='f', quiet=True)
+
+    # Discover what r3.to.rast actually named the output maps (naming varies
+    # across GRASS versions; g.list returns them in alphabetical = depth order).
+    created = sorted(gs.read_command(
+        'g.list', type='raster', pattern=f"{prefix}_*", quiet=True,
+    ).split())
+
+    if not created:
+        gs.fatal(
+            f"r3.to.rast created no output maps matching '{prefix}_*'. "
+            "Ensure the mapset is writable and the 3D raster is valid."
+        )
+
+    # Register all created maps for cleanup.
+    tmp_maps.extend(created)
+
+    # Map band_num -> created map name. r3.to.rast outputs bottom-to-top
+    # (depth 1 = first band = created[0], depth N = last band = created[-1]).
+    band_num_to_map = {i + 1: name for i, name in enumerate(created)}
+    for b in bands:
+        b['map_name'] = band_num_to_map.get(b['band_num'])
 
 
 def find_band(bands, target_wl, tolerance_nm=25):
@@ -421,7 +537,7 @@ def compute_all_indicators(raster3d, bands, pid, tmp_maps, verbose=False):
 
     def bm(b):
         """Band map name for a band dict."""
-        return band_map_name(raster3d, b['band_num'])
+        return b['map_name'] or band_map_name(raster3d, b['band_num'])
 
     def fb(wl, tol=25):
         return find_band(bands, wl, tol)
@@ -1088,6 +1204,8 @@ def main(options, flags):
     gs.message(f"Scanning hyperspectral bands in: {raster3d}")
     bands = get_all_band_wavelengths(raster3d, only_valid=flag_n,
                                      min_wl=min_wl, max_wl=max_wl)
+    if bands and bands[0]['map_name'] is None:
+        extract_band_slices(raster3d, bands, pid, tmp_maps)
     cov = assess_coverage(bands)
 
     gs.message(f"Found {cov['n_total']} usable bands: "

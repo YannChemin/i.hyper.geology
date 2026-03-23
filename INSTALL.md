@@ -142,17 +142,28 @@ i.hyper.rgb           ← RGB composites for visualisation
 
 ### `No wavelength metadata found`
 
-`i.hyper.geology` reads wavelength metadata from band-slice raster history
-set by `i.hyper.import`.  If you see this error, the input was not created
-by `i.hyper.import` or is missing `wavelength=`, `FWHM=`, and `valid=` keys
-in its band metadata.  Verify with:
+`i.hyper.geology` reads wavelength metadata from two sources (tried in order):
 
-```bash
-r.info -h map="my_cube#1"
-```
+1. **2D band-slice rasters** — individual rasters named `my_cube#N` created by
+   `i.hyper.import`.  Verify with:
+   ```bash
+   r.info -h map="my_cube#1"
+   ```
+   The output should include `wavelength=450.0`, `FWHM=10.0`, `valid=1`,
+   `unit=nm` in the history/description section.
 
-The output should include lines such as `wavelength=450.0`, `FWHM=10.0`,
-`valid=1`, and `unit=nm` in the history/description section.
+2. **3D raster comments** — for cubes imported directly with `r3.in.bin` or
+   similar tools that store band metadata in the 3D raster comment block as
+   `Band N: WAVELENGTH nm, FWHM: F nm` lines.  The module detects this
+   automatically and extracts 2D band slices on the fly via `r3.to.rast`.
+   Verify with:
+   ```bash
+   r3.info map="my_cube"
+   ```
+
+If neither source is present the error is fatal.  Re-import using
+`i.hyper.import` or ensure the `r3.in.bin` import script writes band metadata
+into the 3D raster comments.
 
 ### `r.mapcalc` expression too long
 
