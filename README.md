@@ -75,31 +75,73 @@ geological mapping context where VNIR-SWIR reflectance data are available.
 
 ---
 
+## Output map types
+
+| Output | GRASS type | Value range | Meaning |
+|--------|-----------|-------------|---------|
+| `output_family` | integer CELL | 0 – 9 | Rock family class (see table above) |
+| `output_weathering` | integer CELL | 0 – 5 | Weathering grade W0–W5 |
+| `output_alteration` | integer CELL | 1 – 10 | Alteration type code (see table above) |
+| `{output_prefix}_{indicator}` | float FCELL | see below | Spectral indicator value |
+
 ## Spectral indicators
 
-All 15 indicators are computed as normalised band depths
-(`1 − ρ_center / mean(ρ_left, ρ_right)`) or reflectance ratios, then used
-as inputs to the scoring classifier.
+All 15 indicators are output as **floating-point FCELL** maps when `-m` is
+used.  There are three value regimes:
+
+**Band depth maps** (`jarosite_vnir`, `goethite_900`, `ferrous_1000`,
+`hydroxyl_1400`, `water_1900`, `gypsum_1750`, `aloh_2200`, `alunite_2270`,
+`mgoh_2300`, `carbonate_2340`):
+
+```
+value = max(0,  1 − ρ_center / mean(ρ_left, ρ_right))
+```
+
+| Value | Interpretation |
+|-------|---------------|
+| 0.00 | No absorption (flat or peaked spectrum at this wavelength) |
+| 0.01–0.03 | Trace / below detection |
+| 0.03–0.06 | Detectable absorption |
+| 0.06–0.15 | Moderate — used as classifier thresholds (e.g. Al-OH > 0.06, Mg-OH > 0.08) |
+| > 0.15 | Strong absorption; typically a pure or nearly pure mineral surface |
+| ~0.5–0.8 | Exceptionally deep feature (rare in natural surfaces) |
+
+**Reflectance ratio maps** (`hematite_vnir`, `fe_oxide_broad`, `aloh_position`):
+
+| Indicator | Formula | Range | Threshold |
+|-----------|---------|-------|-----------|
+| `hematite_vnir` | ρ₆₃₀ / ρ₄₉₀ | 0.5 – 2.5 | > 1.2 indicates hematite |
+| `fe_oxide_broad` | ρ₇₅₀ / ρ₅₅₀ | 0.5 – 3.0 | > 1.5 indicates strong Fe³⁺ |
+| `aloh_position` | ρ₂₁₆₅ / ρ₂₂₂₀ | 0.2 – 5.0 | > 1.0 = muscovite (phyllic); < 1.0 = kaolinite (argillic) |
+
+**Composite index maps** (`reactivity_index`, `clay_mixture_index`)¹:
+
+| Indicator | Formula | Published range | Threshold |
+|-----------|---------|-----------------|-----------|
+| `reactivity_index` | (ρ₂₂₁₀ + ρ₂₃₉₅) / (ρ₂₂₈₅ + ρ₂₃₃₀) | 0.66 – 2.11 | > 1.5 = AMD-reactive |
+| `clay_mixture_index` | (ρ₂₁₆₈ × ρ₂₂₂₄) / ρ₂₁₉₈ | 1.15 – 4.34 | > 2.0 = clay-rich mixed |
+
+¹ Ranges and thresholds after Tolentino et al. (2025).
+
+**Full indicator table:**
 
 | Indicator | Wavelengths (nm) | Target mineral / feature |
 |-----------|-----------------|--------------------------|
 | `jarosite_vnir` | 400 / 430 / 470 | Jarosite (AMD) |
-| `hematite_vnir` | 630 / 490 ratio | Hematite |
+| `hematite_vnir` | ρ₆₃₀ / ρ₄₉₀ ratio | Hematite |
 | `goethite_900` | 750 / 900 / 1050 | Goethite |
-| `fe_oxide_broad` | 750 / 550 ratio | Broad Fe³⁺ |
+| `fe_oxide_broad` | ρ₇₅₀ / ρ₅₅₀ ratio | Broad Fe³⁺ |
 | `ferrous_1000` | 850 / 1000 / 1200 | Pyroxene / Olivine |
 | `hydroxyl_1400` | 1350 / 1400 / 1500 | OH overtone |
 | `water_1900` | 1800 / 1900 / 2000 | H₂O first overtone |
 | `gypsum_1750` | 1700 / 1750 / 1800 | Gypsum SO₄²⁻ |
 | `aloh_2200` | 2100 / 2200 / 2280 | Al-OH (clays, mica) |
-| `aloh_position` | 2165 / 2220 ratio | Al-OH position: > 1.0 → muscovite (phyllic); < 1.0 → kaolinite (argillic) |
+| `aloh_position` | ρ₂₁₆₅ / ρ₂₂₂₀ ratio | Al-OH position: > 1.0 → muscovite; < 1.0 → kaolinite |
 | `alunite_2270` | 2220 / 2270 / 2310 | Alunite / advanced argillic |
 | `mgoh_2300` | 2250 / 2320 / 2400 | Mg-OH (chlorite, serpentine, talc) |
 | `carbonate_2340` | 2290 / 2340 / 2400 | Calcite / dolomite CO₃²⁻ |
 | `reactivity_index` | (2210+2395)/(2285+2330) | AMD-reactive sulphate/clay¹ |
 | `clay_mixture_index` | (2168×2224)/2198 | Clay-rich mixed surfaces¹ |
-
-¹ Band ratio indices after Tolentino et al. (2025).
 
 ---
 

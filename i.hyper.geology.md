@@ -75,11 +75,30 @@ The module expects input data to be a 3D raster map created by
 band-level metadata following the *i.hyper* standard format:
 **wavelength**, **FWHM**, **valid**, and **unit**.
 
+### Output map types
+
+Classification output maps (`output_family`, `output_weathering`,
+`output_alteration`) are **integer CELL** rasters with category labels
+assigned automatically.  Indicator maps (`{output_prefix}_{name}`, produced
+with `-m`) are **floating-point FCELL** rasters.
+
 ### Spectral indicators
 
-The module computes 15 spectral indicators via **r.mapcalc**:
+The module computes 15 spectral indicators via **r.mapcalc**.
 
-**Band depth indicators** (normalized band depth = `1 - rho_c / mean(rho_l, rho_r)`):
+**Band depth indicators** — formula: `max(0, 1 - rho_c / mean(rho_l, rho_r))`
+
+The value is 0.0 when the center band is brighter than or equal to the
+local continuum (no absorption), and increases with absorption strength.
+Typical interpretation:
+
+- 0.00 : no absorption
+- 0.01–0.03 : trace / below detection
+- 0.03–0.06 : detectable (used as lower classifier thresholds)
+- 0.06–0.15 : moderate to strong (e.g. Al-OH > 0.06 → phyllic/argillic; Mg-OH > 0.08 → serpentinization)
+- > 0.15 : strong; nearly pure mineral surface
+
+Indicators and their band triplets:
 
 - `jarosite_vnir` : depth at 430 nm (400/430/470 nm bands)
 - `goethite_900` : depth at 900 nm (750/900/1050 nm)
@@ -92,16 +111,16 @@ The module computes 15 spectral indicators via **r.mapcalc**:
 - `mgoh_2300` : depth at 2320 nm; Mg-OH minerals (2250/2320/2400 nm)
 - `carbonate_2340` : depth at 2340 nm; CO3 (2290/2340/2400 nm)
 
-**Ratio indicators**:
+**Ratio indicators** — value is dimensionless (reflectance ratio):
 
-- `hematite_vnir` : rho630/rho490 (hematite doublet, Fe3+)
-- `fe_oxide_broad` : rho750/rho550 (broad Fe3+ charge-transfer)
-- `aloh_position` : rho2165/rho2220 (>1 = muscovite direction / phyllic; <1 = kaolinite direction / argillic)
+- `hematite_vnir` : rho630/rho490; hematite doublet Fe3+; **> 1.2** indicates hematite
+- `fe_oxide_broad` : rho750/rho550; broad Fe3+ charge-transfer; **> 1.5** indicates strong Fe-oxide
+- `aloh_position` : rho2165/rho2220; **> 1.0** = muscovite direction (phyllic); **< 1.0** = kaolinite direction (argillic)
 
 **Composite indices** from Tolentino et al. (2025):
 
-- `reactivity_index` : (rho2210 + rho2395) / (rho2285 + rho2330); AMD reactivity range 0.66-2.11
-- `clay_mixture_index` : (rho2168 × rho2224) / rho2198; clay mixtures range 1.15-4.34
+- `reactivity_index` : (rho2210 + rho2395) / (rho2285 + rho2330); range 0.66–2.11; **> 1.5** = AMD-reactive
+- `clay_mixture_index` : (rho2168 × rho2224) / rho2198; range 1.15–4.34; **> 2.0** = clay-rich mixed surface
 
 ### Classification method
 

@@ -90,6 +90,25 @@ band-level metadata following the <em>i.hyper</em> standard format:
 radiance or raw digital numbers will produce invalid results. Apply
 atmospheric correction (e.g., <em>i.hyper.atcorr</em>) before using this module.</p>
 
+<h3>Output map types</h3>
+
+<p>Classification maps (<code>output_family</code>, <code>output_weathering</code>,
+<code>output_alteration</code>) are <b>integer CELL</b> rasters with category labels
+assigned automatically.  Indicator maps (<code>{output_prefix}_{name}</code>, produced
+with <b>-m</b>) are <b>floating-point FCELL</b> rasters.</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Output</th><th>Type</th><th>Value range</th><th>Meaning</th></tr>
+  <tr><td>output_family</td><td>integer CELL</td><td>0 – 9</td><td>Rock family class</td></tr>
+  <tr><td>output_weathering</td><td>integer CELL</td><td>0 – 5</td><td>Weathering grade W0–W5</td></tr>
+  <tr><td>output_alteration</td><td>integer CELL</td><td>1 – 10</td><td>Alteration type code</td></tr>
+  <tr><td>{prefix}_band_depth</td><td>float FCELL</td><td>0.0 – ~0.8</td><td>Normalised absorption depth (0 = none)</td></tr>
+  <tr><td>{prefix}_hematite_vnir / fe_oxide_broad</td><td>float FCELL</td><td>0.5 – 3.0</td><td>Reflectance ratio (&gt;1 = Fe-oxide present)</td></tr>
+  <tr><td>{prefix}_aloh_position</td><td>float FCELL</td><td>0.2 – 5.0</td><td>Al-OH position ratio</td></tr>
+  <tr><td>{prefix}_reactivity_index</td><td>float FCELL</td><td>0.66 – 2.11</td><td>AMD reactivity (Tolentino et al. 2025)</td></tr>
+  <tr><td>{prefix}_clay_mixture_index</td><td>float FCELL</td><td>1.15 – 4.34</td><td>Clay mixture richness</td></tr>
+</table>
+
 <h3>Spectral indicators</h3>
 
 <p>The module computes 15 spectral indicators via <b>r.mapcalc</b>. Each indicator
@@ -98,8 +117,17 @@ targets a specific mineral absorption feature.</p>
 <p><b>Band depth indicators</b> use the normalized band depth formula:</p>
 <div class="code"><pre>band_depth = max(0, 1 - rho_center / mean(rho_left, rho_right))</pre></div>
 
-<p>This is a continuum-removed depth estimate at a single absorption feature,
-clamped to zero (negative values indicate a reflectance peak, not an absorption).</p>
+<p>The value is 0.0 when there is no absorption at the target wavelength.  It
+increases with absorption strength:</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Value</th><th>Interpretation</th></tr>
+  <tr><td>0.00</td><td>No absorption (flat or peaked spectrum)</td></tr>
+  <tr><td>0.01–0.03</td><td>Trace / below detection</td></tr>
+  <tr><td>0.03–0.06</td><td>Detectable absorption</td></tr>
+  <tr><td>0.06–0.15</td><td>Moderate to strong — classifier thresholds fall in this range (e.g. Al-OH &gt; 0.06 → phyllic/argillic; Mg-OH &gt; 0.08 → serpentinization; CO₃ &gt; 0.06 → carbonate alteration)</td></tr>
+  <tr><td>&gt; 0.15</td><td>Strong absorption; nearly pure or concentrated mineral surface</td></tr>
+</table>
 
 <table border="1" cellpadding="4" cellspacing="0">
   <tr><th>Indicator</th><th>Target (nm)</th><th>Bands used (nm)</th><th>Mineral target</th></tr>
@@ -126,8 +154,8 @@ clamped to zero (negative values indicate a reflectance peak, not an absorption)
 <p><b>Composite indices</b> from Tolentino et al. (2025):</p>
 <table border="1" cellpadding="4" cellspacing="0">
   <tr><th>Index</th><th>Formula</th><th>Range</th></tr>
-  <tr><td>reactivity_index</td><td>(rho2210 + rho2395) / (rho2285 + rho2330)</td><td>0.66 - 2.11; AMD reactivity</td></tr>
-  <tr><td>clay_mixture_index</td><td>(rho2168 &times; rho2224) / rho2198</td><td>1.15 - 4.34; clay mixtures</td></tr>
+  <tr><td>reactivity_index</td><td>(rho2210 + rho2395) / (rho2285 + rho2330)</td><td>0.66 – 2.11; &gt; 1.5 = AMD-reactive</td></tr>
+  <tr><td>clay_mixture_index</td><td>(rho2168 &times; rho2224) / rho2198</td><td>1.15 – 4.34; &gt; 2.0 = clay-rich mixed surface</td></tr>
 </table>
 
 <h3>Classification method</h3>
