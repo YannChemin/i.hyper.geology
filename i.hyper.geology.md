@@ -136,6 +136,18 @@ The priority order for tie-breaking when scores are equal is:
 Evaporite/Sulphate > Carbonate > Ultramafic > Mafic > Metamorphic >
 Felsic > Intermediate > Siliciclastic.
 
+### Band slice extraction
+
+When 2D band-slice rasters are not pre-created by *i.hyper.import* (e.g.
+direct 3D raster imports via `r3.in.bin`), the module extracts slices
+on-the-fly using `Rast3d_extract_z_slice()` from the GRASS raster3d
+library (`libgrass_g3d`).  The function opens the 3D map with
+`RASTER3D_NO_CACHE` and calls `Rast3d_get_block()` in tile-bulk mode:
+only tiles covering the target Z level are loaded exactly once from disk,
+versus one function call per voxel with the default cache-based API.
+Only the bands required for indicator computation are extracted, not the
+entire depth dimension of the cube.
+
 ### Band tolerance
 
 The **find_band()** function uses a default tolerance of 25 nm when

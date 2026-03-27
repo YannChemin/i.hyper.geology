@@ -194,6 +194,18 @@ tuning, visual inspection, or input to custom classification workflows.</p>
 band used for each indicator computation. Useful for validating sensor-to-wavelength
 matching.</p>
 
+<h3>Band slice extraction</h3>
+
+<p>When 2D band-slice rasters are not pre-created by <em>i.hyper.import</em>
+(e.g. direct 3D raster imports via <code>r3.in.bin</code>), the module extracts
+slices on-the-fly using <code>Rast3d_extract_z_slice()</code> from the GRASS
+raster3d library (<code>libgrass_g3d</code>).  The function opens the 3D map
+with <code>RASTER3D_NO_CACHE</code> and calls <code>Rast3d_get_block()</code> in
+tile-bulk mode: only tiles covering the target Z level are loaded exactly
+once from disk, versus one function call per voxel with the default
+cache-based API.  Only the bands required for indicator computation are
+extracted, not the entire depth dimension of the cube.</p>
+
 <h3>Limitations</h3>
 
 <ul>

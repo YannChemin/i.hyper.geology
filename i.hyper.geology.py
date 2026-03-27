@@ -100,6 +100,8 @@
 import sys
 import os
 import re
+import ctypes
+import ctypes.util
 import grass.script as gs
 
 # ---------------------------------------------------------------------------
@@ -290,52 +292,57 @@ def get_all_band_wavelengths(raster3d, only_valid=False, min_wl=None, max_wl=Non
     return bands
 
 
+def _load_g3d_lib():
+    """Load libgrass_g3d via ctypes, using GISBASE for the path."""
+    gisbase = os.environ.get('GISBASE', '')
+    lib_path = os.path.join(gisbase, 'lib', 'libgrass_g3d.so') if gisbase else None
+    if lib_path and os.path.exists(lib_path):
+        lib = ctypes.CDLL(lib_path)
+    else:
+        # Fallback: let the dynamic linker search
+        name = ctypes.util.find_library('grass_g3d') or 'libgrass_g3d.so'
+        lib = ctypes.CDLL(name)
+    lib.Rast3d_extract_z_slice.restype = ctypes.c_int
+    lib.Rast3d_extract_z_slice.argtypes = [
+        ctypes.c_char_p,  # name3d
+        ctypes.c_char_p,  # mapset3d (NULL = search)
+        ctypes.c_int,     # z (0-based from bottom)
+        ctypes.c_char_p,  # name2d
+    ]
+    return lib
+
+
 def extract_band_slices(raster3d, bands, pid, tmp_maps):
-    """Extract 2D band slices from a 3D raster using r3.to.rast.
+    """Extract 2D band slices from a 3D raster using Rast3d_extract_z_slice.
 
     Updates each band dict's 'map_name' in-place.
     Called only when band slice rasters were not created by i.hyper.import.
 
-    r3.to.rast requires the 3D computational region to match the 3D raster.
-    The current region is saved before modification and restored afterwards.
-    Map names produced by r3.to.rast are discovered via g.list so the code
-    is robust to GRASS version differences in naming convention.
+    Uses Rast3d_extract_z_slice() from libgrass_g3d, which opens the 3D map
+    with RASTER3D_NO_CACHE and calls Rast3d_get_block() for a tile-bulk read:
+    each tile at the target Z level is loaded exactly once, versus one function
+    call per voxel with the default per-voxel API.  Only the requested bands
+    are extracted (not all depths).
     """
-    prefix = make_tmp_name(pid, 'bslice')
-    saved_region = make_tmp_name(pid, 'saved_region')
+    lib = _load_g3d_lib()
 
-    # Save current region, align to 3D raster, extract, then restore.
-    gs.run_command('g.region', save=saved_region, overwrite=True, quiet=True)
-    try:
-        gs.run_command('g.region', raster3d=raster3d, quiet=True)
-        gs.message("Extracting 2D band slices from 3D raster (one-time operation)...")
-        gs.run_command('r3.to.rast', input=raster3d, output=prefix,
-                       overwrite=True, quiet=True)
-    finally:
-        gs.run_command('g.region', region=saved_region, quiet=True)
-        gs.run_command('g.remove', type='region', name=saved_region,
-                       flags='f', quiet=True)
+    name3d, mapset3d = (raster3d.split('@') + [''])[:2]
+    name3d_b = name3d.encode()
+    mapset3d_b = mapset3d.encode() if mapset3d else None
 
-    # Discover what r3.to.rast actually named the output maps (naming varies
-    # across GRASS versions; g.list returns them in alphabetical = depth order).
-    created = sorted(gs.read_command(
-        'g.list', type='raster', pattern=f"{prefix}_*", quiet=True,
-    ).split())
-
-    if not created:
-        gs.fatal(
-            f"r3.to.rast created no output maps matching '{prefix}_*'. "
-            "Ensure the mapset is writable and the 3D raster is valid."
-        )
-
-    # Register all created maps for cleanup.
-    tmp_maps.extend(created)
-
-    # Map band_num -> created map name. r3.to.rast outputs bottom-to-top
-    # (depth 1 = first band = created[0], depth N = last band = created[-1]).
-    band_num_to_map = {i + 1: name for i, name in enumerate(created)}
+    gs.message("Extracting 2D band slices from 3D raster (one-time operation)...")
     for b in bands:
-        b['map_name'] = band_num_to_map.get(b['band_num'])
+        z = b['band_num'] - 1  # Rast3d_extract_z_slice uses 0-based z
+        name2d = make_tmp_name(pid, f'bslice_{b["band_num"]}')
+        ret = lib.Rast3d_extract_z_slice(name3d_b, mapset3d_b, z,
+                                          name2d.encode())
+        if ret != 0:
+            gs.fatal(
+                f"Rast3d_extract_z_slice failed for band {b['band_num']} "
+                f"(z={z}) of <{raster3d}>"
+            )
+        tmp_maps.append(name2d)
+        b['map_name'] = name2d
 
 
 def find_band(bands, target_wl, tolerance_nm=25):
