@@ -1,0 +1,18 @@
+# GRASS GIS build artefacts
+*.tmp.md
+*_to_translate.c
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Test output
+testsuite/test_keyvalue_result.txt
+testsuite/testreport_*.xml
+
+# Editor / OS
+.DS_Store
+*~
+*.swp
+*.swo
