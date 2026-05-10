@@ -8,6 +8,20 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 ##############################################################################
 
+# ── ras3d standalone detection ────────────────────────────────────────────────
+import os as _os
+_RAS3D = False
+if not _os.environ.get('GISBASE'):
+    try:
+        import importlib.util as _ilu
+        if _ilu.find_spec('ras3d') and _ilu.find_spec('ras3d_grass_shim'):
+            from ras3d_grass_shim import install as _r3_install
+            _r3_install()
+            _RAS3D = True
+    except Exception:
+        pass
+# ─────────────────────────────────────────────────────────────────────────────
+
 # %module
 # % description: Geological rock family classification, weathering grade and alteration type mapping from hyperspectral imagery
 # % keyword: imagery
@@ -228,6 +242,37 @@ def get_all_band_wavelengths(raster3d, only_valid=False, min_wl=None, max_wl=Non
     - When they do not exist (r3.in.bin / direct import workflow), map_name is
       None; call extract_band_slices() before computing indicators.
     """
+    if _RAS3D:
+        import json as _json
+        import ras3d as _r3
+        for _sfx in ('', '.tif', '.tiff', '.h5', '.hdf5'):
+            _base = raster3d.removesuffix(_sfx) if raster3d.endswith(_sfx) else raster3d
+            _wlp = _base + '.wl.json'
+            if _os.path.exists(_wlp):
+                with open(_wlp) as _f:
+                    _wl = _json.load(_f)
+                _wl_nm = [w * 1000 if w < 10 else w for w in _wl]
+                bands = []
+                for i, wl in enumerate(_wl_nm):
+                    if min_wl is not None and wl < min_wl:
+                        continue
+                    if max_wl is not None and wl > max_wl:
+                        continue
+                    bands.append({'band_num': i+1, 'wavelength': wl, 'fwhm': None,
+                                  'valid': 1, 'unit': 'nm', 'map_name': None})
+                bands.sort(key=lambda x: x['wavelength'])
+                return bands
+        _h = _r3.open_cube(raster3d); _r = _r3.get_region(_h); _r3.close_cube(_h)
+        bands = []
+        for i in range(_r['depths']):
+            wl = float(i + 1)
+            if min_wl is not None and wl < min_wl:
+                continue
+            if max_wl is not None and wl > max_wl:
+                continue
+            bands.append({'band_num': i+1, 'wavelength': wl, 'fwhm': None,
+                          'valid': 1, 'unit': 'nm', 'map_name': None})
+        return bands
     info = get_raster3d_info(raster3d)
     depths = int(info['depths'])
     bands = []
@@ -324,6 +369,21 @@ def extract_band_slices(raster3d, bands, pid, tmp_maps):
     call per voxel with the default per-voxel API.  Only the requested bands
     are extracted (not all depths).
     """
+    if _RAS3D:
+        import ras3d as _r3
+        import ras3d_write as _r3w
+        from ras3d_grass_shim import get_band_cache
+        gs.message("[ras3d] Extracting 2D band slices from 3D raster...")
+        _h = _r3.open_cube(raster3d)
+        for b in bands:
+            name2d = make_tmp_name(pid, f'bslice_{b["band_num"]}')
+            _arr = _r3.get_band(_h, b['band_num'] - 1)
+            get_band_cache()[name2d] = _arr
+            _r3w.write_raster2d(_r3w.outpath(name2d), _arr, _h)
+            tmp_maps.append(name2d)
+            b['map_name'] = name2d
+        _r3.close_cube(_h)
+        return
     lib = _load_g3d_lib()
 
     name3d, mapset3d = (raster3d.split('@') + [''])[:2]
@@ -1159,7 +1219,7 @@ def set_map_metadata(output_name, title, description):
 # Mineral indicator output maps
 # ---------------------------------------------------------------------------
 
-def output_mineral_maps(indicators, prefix, tmp_maps):
+def output_mineral_maps(indicators, prefix, tmp_maps, raster3d=None):
     """Copy indicator maps to user-visible output maps with given prefix."""
     mineral_keys = [
         'jarosite_vnir', 'hematite_vnir', 'goethite_900', 'fe_oxide_broad',
@@ -1172,13 +1232,28 @@ def output_mineral_maps(indicators, prefix, tmp_maps):
         if src is None:
             continue
         dst = f"{prefix}_{key}"
-        try:
-            gs.run_command('r.mapcalc',
-                           expression=f"{dst} = {src}",
-                           overwrite=True, quiet=True)
-            gs.message(f"    Wrote mineral indicator: {dst}")
-        except Exception as e:
-            gs.warning(f"Could not write mineral map {dst}: {e}")
+        if _RAS3D:
+            try:
+                import ras3d as _r3, ras3d_write as _r3w
+                from ras3d_grass_shim import get_band_cache as _gbc
+                _cache = _gbc()
+                if src in _cache and raster3d is not None:
+                    _h_out = _r3.open_cube(raster3d)
+                    _r3w.write_raster2d(_r3w.outpath(dst), _cache[src], _h_out)
+                    _r3.close_cube(_h_out)
+                    gs.message(f"    Wrote mineral indicator: {dst}")
+                else:
+                    gs.warning(f"Could not write mineral map {dst}: not in band cache")
+            except Exception as e:
+                gs.warning(f"Could not write mineral map {dst}: {e}")
+        else:
+            try:
+                gs.run_command('r.mapcalc',
+                               expression=f"{dst} = {src}",
+                               overwrite=True, quiet=True)
+                gs.message(f"    Wrote mineral indicator: {dst}")
+            except Exception as e:
+                gs.warning(f"Could not write mineral map {dst}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1252,6 +1327,12 @@ def main(options, flags):
 
         gs.message(f"  Writing rock family map: {output_family}")
         build_family_classification(pid, indicators, scores, tmp_maps, output_family)
+        if _RAS3D:
+            import ras3d as _r3, ras3d_write as _r3w
+            from ras3d_grass_shim import get_band_cache as _gbc
+            _h_out = _r3.open_cube(raster3d)
+            _r3w.write_raster2d(_r3w.outpath(output_family), _gbc()[output_family], _h_out)
+            _r3.close_cube(_h_out)
         set_family_colors(output_family)
         set_family_categories(output_family)
         set_map_metadata(output_family,
@@ -1267,6 +1348,12 @@ def main(options, flags):
             gs.percent(2, 4, 1)
             gs.message(f"  Writing weathering map: {output_weathering}")
             build_weathering_map(pid, indicators, output_weathering)
+            if _RAS3D:
+                import ras3d as _r3, ras3d_write as _r3w
+                from ras3d_grass_shim import get_band_cache as _gbc
+                _h_out = _r3.open_cube(raster3d)
+                _r3w.write_raster2d(_r3w.outpath(output_weathering), _gbc()[output_weathering], _h_out)
+                _r3.close_cube(_h_out)
             set_weathering_colors(output_weathering)
             set_weathering_categories(output_weathering)
             set_map_metadata(output_weathering,
@@ -1283,6 +1370,12 @@ def main(options, flags):
             gs.percent(3, 4, 1)
             gs.message(f"  Writing alteration map: {output_alteration}")
             build_alteration_map(pid, indicators, output_alteration)
+            if _RAS3D:
+                import ras3d as _r3, ras3d_write as _r3w
+                from ras3d_grass_shim import get_band_cache as _gbc
+                _h_out = _r3.open_cube(raster3d)
+                _r3w.write_raster2d(_r3w.outpath(output_alteration), _gbc()[output_alteration], _h_out)
+                _r3.close_cube(_h_out)
             set_alteration_colors(output_alteration)
             set_alteration_categories(output_alteration)
             set_map_metadata(output_alteration,
@@ -1297,7 +1390,7 @@ def main(options, flags):
         # Step 7: Optional mineral indicator maps
         if flag_m:
             gs.message(f"  Writing mineral indicator maps with prefix: {output_prefix}")
-            output_mineral_maps(indicators, output_prefix, tmp_maps)
+            output_mineral_maps(indicators, output_prefix, tmp_maps, raster3d=raster3d)
 
         gs.percent(4, 4, 1)
         gs.message(" ")
