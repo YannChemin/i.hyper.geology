@@ -233,6 +233,44 @@ def convert_wavelength_to_nm(wavelength, unit):
         return wavelength
 
 
+def _load_hyper_json_bands(raster3d):
+    """Read wavelength/fwhm/validity from i.hyper.import's JSON sidecar.
+
+    i.hyper.import (HyperMetadata) stores band metadata at
+    $MAPSET/grid3/<mapname>/hyper.json rather than in r3.support history,
+    so that must be checked before falling back to r.info/r3.info probing.
+    """
+    import json as _json
+
+    name, mapset = (raster3d.split('@', 1) if '@' in raster3d
+                     else (raster3d, None))
+    try:
+        env = gs.gisenv()
+        mapset = mapset or env['MAPSET']
+        path = os.path.join(env['GISDBASE'], env['LOCATION_NAME'], mapset,
+                            'grid3', name, 'hyper.json')
+    except Exception:
+        return []
+
+    if not os.path.isfile(path):
+        return []
+
+    with open(path) as _fj:
+        data = _json.load(_fj)
+
+    b = data.get('bands') or {}
+    wavelengths = b.get('wavelength')
+    if not wavelengths:
+        return []
+    fwhms = b.get('fwhm') or []
+    valids = b.get('validity') or []
+
+    return [{'band': i + 1, 'wavelength': float(wl),
+             'fwhm': float(fwhms[i]) if i < len(fwhms) else 0,
+             'valid': bool(valids[i]) if i < len(valids) else True}
+            for i, wl in enumerate(wavelengths)]
+
+
 def get_all_band_wavelengths(raster3d, only_valid=False, min_wl=None, max_wl=None):
     """Extract all band wavelengths and metadata from 3D raster.
 
@@ -242,6 +280,23 @@ def get_all_band_wavelengths(raster3d, only_valid=False, min_wl=None, max_wl=Non
     - When they do not exist (r3.in.bin / direct import workflow), map_name is
       None; call extract_band_slices() before computing indicators.
     """
+    json_bands_raw = _load_hyper_json_bands(raster3d)
+    if json_bands_raw:
+        bands = []
+        for b in json_bands_raw:
+            if min_wl is not None and b['wavelength'] < min_wl:
+                continue
+            if max_wl is not None and b['wavelength'] > max_wl:
+                continue
+            if only_valid and not b['valid']:
+                continue
+            bands.append({'band_num': b['band'], 'wavelength': b['wavelength'],
+                          'fwhm': b['fwhm'], 'valid': int(b['valid']),
+                          'unit': 'nm', 'map_name': None})
+        if bands:
+            bands.sort(key=lambda x: x['wavelength'])
+            return bands
+
     if _RAS3D:
         import json as _json
         import ras3d as _r3
